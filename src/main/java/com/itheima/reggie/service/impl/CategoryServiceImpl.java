@@ -1,3 +1,4 @@
+/*
 package com.itheima.reggie.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -21,3 +22,4 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper,Category> im
 
     }
 }
+*/
