@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.sql.SQLIntegrityConstraintViolationException;
 
 /**
@@ -33,4 +32,16 @@ public class GlobalExceptionHandler {
 
         return R.error("未知错误");
     }
+
+    /**
+     * 异常处理方法
+     * @return
+     */
+    @ExceptionHandler(CustomException.class)
+    public R<String> exceptionHandler(CustomException ex){
+        log.error(ex.getMessage());
+
+        return R.error(ex.getMessage());
+    }
+
 }
