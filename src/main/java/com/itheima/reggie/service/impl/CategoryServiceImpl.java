@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -60,7 +61,7 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper,Category> im
         LambdaQueryWrapper<ColdChainOrderDO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ColdChainOrderDO::getDriverId, id);
         queryWrapper.orderByDesc(ColdChainOrderDO::getCreateTime);
-        Optional.ofNullable(coldChainOrderMapper.selectList(queryWrapper))
+        List<ColdChainOrderDO> coldChainOrderDOList = Optional.ofNullable(coldChainOrderMapper.selectList(queryWrapper))
                 .orElse(Collections.emptyList());
         //正常删除分类
         super.removeById(id);
