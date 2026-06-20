@@ -2,7 +2,7 @@ package com.itheima.reggie.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.dto.DishDto;
 import com.itheima.reggie.entity.Category;
 import com.itheima.reggie.entity.Dish;
@@ -11,7 +11,6 @@ import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishFlavorService;
 import com.itheima.reggie.service.DishService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -41,12 +40,12 @@ public class DishController {
      * @return
      */
     @PostMapping
-    public R<String> save(@RequestBody DishDto dishDto){
+    public ReggieResult<String> save(@RequestBody DishDto dishDto){
         log.info(dishDto.toString());
 
         dishService.saveWithFlavor(dishDto);
 
-        return R.success("新增菜品成功");
+        return ReggieResult.success("新增菜品成功");
     }
 
     /**
@@ -57,7 +56,7 @@ public class DishController {
      * @return
      */
     @GetMapping("/page")
-    public R<Page> page(int page,int pageSize,String name){
+    public ReggieResult<Page> page(int page, int pageSize, String name){
 
         //构造分页构造器对象
         Page<Dish> pageInfo = new Page<>(page,pageSize);
@@ -96,7 +95,7 @@ public class DishController {
 
         dishDtoPage.setRecords(list);
 
-        return R.success(dishDtoPage);
+        return ReggieResult.success(dishDtoPage);
     }
 
     /**
@@ -105,11 +104,11 @@ public class DishController {
      * @return
      */
     @GetMapping("/{id}")
-    public R<DishDto> get(@PathVariable Long id){
+    public ReggieResult<DishDto> get(@PathVariable Long id){
 
         DishDto dishDto = dishService.getByIdWithFlavor(id);
 
-        return R.success(dishDto);
+        return ReggieResult.success(dishDto);
     }
 
     /**
@@ -118,12 +117,12 @@ public class DishController {
      * @return
      */
     @PutMapping
-    public R<String> update(@RequestBody DishDto dishDto){
+    public ReggieResult<String> update(@RequestBody DishDto dishDto){
         log.info(dishDto.toString());
 
         dishService.updateWithFlavor(dishDto);
 
-        return R.success("修改菜品成功");
+        return ReggieResult.success("修改菜品成功");
     }
 
     /**
@@ -148,7 +147,7 @@ public class DishController {
     }*/
 
     @GetMapping("/list")
-    public R<List<DishDto>> list(Dish dish){
+    public ReggieResult<List<DishDto>> list(Dish dish){
         //构造查询条件
         LambdaQueryWrapper<Dish> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(dish.getCategoryId() != null ,Dish::getCategoryId,dish.getCategoryId());
@@ -184,7 +183,7 @@ public class DishController {
             return dishDto;
         }).collect(Collectors.toList());
 
-        return R.success(dishDtoList);
+        return ReggieResult.success(dishDtoList);
     }
 
 }

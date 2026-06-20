@@ -1,6 +1,6 @@
 package com.itheima.reggie.controller;
 
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.entity.Orders;
 import com.itheima.reggie.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
@@ -27,9 +27,9 @@ public class OrderController {
      * @return
      */
     @PostMapping("/submit")
-    public R<String> submit(@RequestBody Orders orders){
+    public ReggieResult<String> submit(@RequestBody Orders orders){
         log.info("订单数据：{}",orders);
         orderService.submit(orders);
-        return R.success("下单成功");
+        return ReggieResult.success("下单成功");
     }
 }

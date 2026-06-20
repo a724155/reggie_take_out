@@ -1,10 +1,9 @@
 package com.itheima.reggie.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.entity.User;
 import com.itheima.reggie.service.UserService;
-import com.itheima.reggie.utils.SMSUtils;
 import com.itheima.reggie.utils.ValidateCodeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
@@ -31,7 +30,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/sendMsg")
-    public R<String> sendMsg(@RequestBody User user, HttpSession session){
+    public ReggieResult<String> sendMsg(@RequestBody User user, HttpSession session){
         //获取手机号
         String phone = user.getPhone();
 
@@ -46,10 +45,10 @@ public class UserController {
             //需要将生成的验证码保存到Session
             session.setAttribute(phone,code);
 
-            return R.success("手机验证码短信发送成功");
+            return ReggieResult.success("手机验证码短信发送成功");
         }
 
-        return R.error("短信发送失败");
+        return ReggieResult.error("短信发送失败");
     }
 
     /**
@@ -59,7 +58,7 @@ public class UserController {
      * @return
      */
     @PostMapping("/login")
-    public R<User> login(@RequestBody Map map, HttpSession session){
+    public ReggieResult<User> login(@RequestBody Map map, HttpSession session){
         log.info(map.toString());
 
         //获取手机号
@@ -87,9 +86,9 @@ public class UserController {
                 userService.save(user);
             }
             session.setAttribute("user",user.getId());
-            return R.success(user);
+            return ReggieResult.success(user);
         }
-        return R.error("登录失败");
+        return ReggieResult.error("登录失败");
     }
 
 }

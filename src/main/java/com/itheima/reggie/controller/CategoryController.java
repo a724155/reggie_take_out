@@ -2,12 +2,11 @@ package com.itheima.reggie.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.entity.Category;
 import com.itheima.reggie.service.CategoryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,10 +27,10 @@ public class CategoryController {
      * @return
      */
     @PostMapping
-    public R<String> save(@RequestBody Category category){
+    public ReggieResult<String> save(@RequestBody Category category){
         log.info("category:{}",category);
         categoryService.save(category);
-        return R.success("新增分类成功");
+        return ReggieResult.success("新增分类成功");
     }
 
     /**
@@ -41,7 +40,7 @@ public class CategoryController {
      * @return
      */
     @GetMapping("/page")
-    public R<Page> page(int page,int pageSize){
+    public ReggieResult<Page> page(int page, int pageSize){
         //分页构造器
         Page<Category> pageInfo = new Page<>(page,pageSize);
         //条件构造器
@@ -51,7 +50,7 @@ public class CategoryController {
 
         //分页查询
         categoryService.page(pageInfo,queryWrapper);
-        return R.success(pageInfo);
+        return ReggieResult.success(pageInfo);
     }
 
     /**
@@ -60,13 +59,13 @@ public class CategoryController {
      * @return
      */
     @DeleteMapping
-    public R<String> delete(Long id){
+    public ReggieResult<String> delete(Long id){
         log.info("删除分类，id为：{}",id);
 
         //categoryService.removeById(id);
         categoryService.remove(id);
 
-        return R.success("分类信息删除成功");
+        return ReggieResult.success("分类信息删除成功");
     }
 
     /**
@@ -75,12 +74,12 @@ public class CategoryController {
      * @return
      */
     @PutMapping
-    public R<String> update(@RequestBody Category category){
+    public ReggieResult<String> update(@RequestBody Category category){
         log.info("修改分类信息：{}",category);
 
         categoryService.updateById(category);
 
-        return R.success("修改分类信息成功");
+        return ReggieResult.success("修改分类信息成功");
     }
 
     /**
@@ -89,7 +88,7 @@ public class CategoryController {
      * @return
      */
     @GetMapping("/list")
-    public R<List<Category>> list(Category category){
+    public ReggieResult<List<Category>> list(Category category){
         //条件构造器
         LambdaQueryWrapper<Category> queryWrapper = new LambdaQueryWrapper<>();
         //添加条件
@@ -98,6 +97,6 @@ public class CategoryController {
         queryWrapper.orderByAsc(Category::getSort).orderByDesc(Category::getUpdateTime);
 
         List<Category> list = categoryService.list(queryWrapper);
-        return R.success(list);
+        return ReggieResult.success(list);
     }
 }

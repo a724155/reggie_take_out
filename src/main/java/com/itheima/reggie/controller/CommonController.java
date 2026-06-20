@@ -1,6 +1,6 @@
 package com.itheima.reggie.controller;
 
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -10,7 +10,6 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -31,7 +30,7 @@ public class CommonController {
      * @return
      */
     @PostMapping("/upload")
-    public R<String> upload(MultipartFile file){
+    public ReggieResult<String> upload(MultipartFile file){
         //file是一个临时文件，需要转存到指定位置，否则本次请求完成后临时文件会删除
         log.info(file.toString());
 
@@ -56,7 +55,7 @@ public class CommonController {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return R.success(fileName);
+        return ReggieResult.success(fileName);
     }
 
     /**

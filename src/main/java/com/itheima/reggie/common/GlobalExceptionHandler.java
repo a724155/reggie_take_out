@@ -21,16 +21,16 @@ public class GlobalExceptionHandler {
      * @return
      */
     @ExceptionHandler(SQLIntegrityConstraintViolationException.class)
-    public R<String> exceptionHandler(SQLIntegrityConstraintViolationException ex){
+    public ReggieResult<String> exceptionHandler(SQLIntegrityConstraintViolationException ex){
         log.error(ex.getMessage());
 
         if(ex.getMessage().contains("Duplicate entry")){
             String[] split = ex.getMessage().split(" ");
             String msg = split[2] + "已存在";
-            return R.error(msg);
+            return ReggieResult.error(msg);
         }
 
-        return R.error("未知错误");
+        return ReggieResult.error("未知错误");
     }
 
     /**
@@ -38,10 +38,10 @@ public class GlobalExceptionHandler {
      * @return
      */
     @ExceptionHandler(CustomException.class)
-    public R<String> exceptionHandler(CustomException ex){
+    public ReggieResult<String> exceptionHandler(CustomException ex){
         log.error(ex.getMessage());
 
-        return R.error(ex.getMessage());
+        return ReggieResult.error(ex.getMessage());
     }
 
 }

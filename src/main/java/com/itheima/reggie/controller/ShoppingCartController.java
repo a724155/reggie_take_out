@@ -2,7 +2,7 @@ package com.itheima.reggie.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.itheima.reggie.common.BaseContext;
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.entity.ShoppingCart;
 import com.itheima.reggie.service.ShoppingCartService;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ public class ShoppingCartController {
      * @return
      */
     @PostMapping("/add")
-    public R<ShoppingCart> add(@RequestBody ShoppingCart shoppingCart){
+    public ReggieResult<ShoppingCart> add(@RequestBody ShoppingCart shoppingCart){
         log.info("购物车数据:{}",shoppingCart);
 
         //设置用户id，指定当前是哪个用户的购物车数据
@@ -67,7 +67,7 @@ public class ShoppingCartController {
             cartServiceOne = shoppingCart;
         }
 
-        return R.success(cartServiceOne);
+        return ReggieResult.success(cartServiceOne);
     }
 
     /**
@@ -75,7 +75,7 @@ public class ShoppingCartController {
      * @return
      */
     @GetMapping("/list")
-    public R<List<ShoppingCart>> list(){
+    public ReggieResult<List<ShoppingCart>> list(){
         log.info("查看购物车...");
 
         LambdaQueryWrapper<ShoppingCart> queryWrapper = new LambdaQueryWrapper<>();
@@ -84,7 +84,7 @@ public class ShoppingCartController {
 
         List<ShoppingCart> list = shoppingCartService.list(queryWrapper);
 
-        return R.success(list);
+        return ReggieResult.success(list);
     }
 
     /**
@@ -92,7 +92,7 @@ public class ShoppingCartController {
      * @return
      */
     @DeleteMapping("/clean")
-    public R<String> clean(){
+    public ReggieResult<String> clean(){
         //SQL:delete from shopping_cart where user_id = ?
 
         LambdaQueryWrapper<ShoppingCart> queryWrapper = new LambdaQueryWrapper<>();
@@ -100,6 +100,6 @@ public class ShoppingCartController {
 
         shoppingCartService.remove(queryWrapper);
 
-        return R.success("清空购物车成功");
+        return ReggieResult.success("清空购物车成功");
     }
 }

@@ -2,7 +2,7 @@ package com.itheima.reggie.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.itheima.reggie.common.R;
+import com.itheima.reggie.common.ReggieResult;
 import com.itheima.reggie.dto.SetmealDto;
 import com.itheima.reggie.entity.Category;
 import com.itheima.reggie.entity.Setmeal;
@@ -10,7 +10,6 @@ import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.SetmealDishService;
 import com.itheima.reggie.service.SetmealService;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -42,12 +41,12 @@ public class SetmealController {
      * @return
      */
     @PostMapping
-    public R<String> save(@RequestBody SetmealDto setmealDto){
+    public ReggieResult<String> save(@RequestBody SetmealDto setmealDto){
         log.info("套餐信息：{}",setmealDto);
 
         setmealService.saveWithDish(setmealDto);
 
-        return R.success("新增套餐成功");
+        return ReggieResult.success("新增套餐成功");
     }
 
     /**
@@ -58,7 +57,7 @@ public class SetmealController {
      * @return
      */
     @GetMapping("/page")
-    public R<Page> page(int page,int pageSize,String name){
+    public ReggieResult<Page> page(int page, int pageSize, String name){
         //分页构造器对象
         Page<Setmeal> pageInfo = new Page<>(page,pageSize);
         Page<SetmealDto> dtoPage = new Page<>();
@@ -92,7 +91,7 @@ public class SetmealController {
         }).collect(Collectors.toList());
 
         dtoPage.setRecords(list);
-        return R.success(dtoPage);
+        return ReggieResult.success(dtoPage);
     }
 
     /**
@@ -101,12 +100,12 @@ public class SetmealController {
      * @return
      */
     @DeleteMapping
-    public R<String> delete(@RequestParam List<Long> ids){
+    public ReggieResult<String> delete(@RequestParam List<Long> ids){
         log.info("ids:{}",ids);
 
         setmealService.removeWithDish(ids);
 
-        return R.success("套餐数据删除成功");
+        return ReggieResult.success("套餐数据删除成功");
     }
 
     /**
@@ -115,7 +114,7 @@ public class SetmealController {
      * @return
      */
     @GetMapping("/list")
-    public R<List<Setmeal>> list(Setmeal setmeal){
+    public ReggieResult<List<Setmeal>> list(Setmeal setmeal){
         LambdaQueryWrapper<Setmeal> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(setmeal.getCategoryId() != null,Setmeal::getCategoryId,setmeal.getCategoryId());
         queryWrapper.eq(setmeal.getStatus() != null,Setmeal::getStatus,setmeal.getStatus());
@@ -123,6 +122,6 @@ public class SetmealController {
 
         List<Setmeal> list = setmealService.list(queryWrapper);
 
-        return R.success(list);
+        return ReggieResult.success(list);
     }
 }
