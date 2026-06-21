@@ -2,6 +2,8 @@ package com.itheima.reggie.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itheima.reggie.dto.DishDto;
 import com.itheima.reggie.entity.Dish;
 import com.itheima.reggie.entity.DishFlavor;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,6 +27,9 @@ public class DishServiceImpl extends ServiceImpl<DishMapper,Dish> implements Dis
 
     @Autowired
     private DishFlavorService dishFlavorService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     /**
      * 新增菜品，同时保存对应的口味数据
@@ -90,5 +96,18 @@ public class DishServiceImpl extends ServiceImpl<DishMapper,Dish> implements Dis
         }).collect(Collectors.toList());
 
         dishFlavorService.saveBatch(flavors);
+    }
+
+    private String toJson(Object object) {
+        if (Objects.isNull(object)) {
+            return null;
+        }
+
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (JsonProcessingException e) {
+            log.error("平台订单扩展信息序列化失败，object={}", object, e);
+            return null;
+        }
     }
 }
