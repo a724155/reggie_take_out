@@ -44,10 +44,7 @@ public class ColdChainPayOrderTimeoutJob {
         Long lastPayOrderId = 0L;
 
         while (true) {
-            List<ColdChainPayOrderDO> payOrderList = coldChainPayOrderService.queryExpiredWaitPayOrderList(
-                            lastPayOrderId,
-                            BATCH_SIZE,
-                            currentTime);
+            List<ColdChainPayOrderDO> payOrderList = coldChainPayOrderService.queryExpiredWaitPayOrderList(lastPayOrderId, BATCH_SIZE, currentTime);
 
             if (CollectionUtils.isEmpty(payOrderList)) {
                 break;
@@ -75,9 +72,7 @@ public class ColdChainPayOrderTimeoutJob {
                  * 此处为了突出 MyBatis-Plus 状态更新逻辑，
                  * 假设渠道查询结果确认仍为未支付。
                  */
-                boolean closeSuccess = coldChainPayOrderService.closePayOrderIfWaitingAndExpired(
-                                payOrderDO.getId(),
-                                currentTime);
+                boolean closeSuccess = coldChainPayOrderService.closePayOrderIfWaitingAndExpired(payOrderDO.getId(), currentTime);
 
                 if (!closeSuccess) {
                     /**
@@ -106,12 +101,7 @@ public class ColdChainPayOrderTimeoutJob {
                  * 但 MQ 发送失败，
                  * 导致货源锁未释放。
                  */
-                log.info(
-                        "冷运支付单超时关闭成功，payOrderId={}, cargoId={}, driverId={}",
-                        payOrderDO.getId(),
-                        payOrderDO.getCargoId(),
-                        payOrderDO.getDriverId()
-                );
+                log.info("冷运支付单超时关闭成功，payOrderId={}, cargoId={}, driverId={}", payOrderDO.getId(), payOrderDO.getCargoId(), payOrderDO.getDriverId());
             }
 
             /**
