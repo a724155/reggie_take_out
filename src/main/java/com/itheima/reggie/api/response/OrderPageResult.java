@@ -15,7 +15,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PageResult<T> {
+public class OrderPageResult<T> {
 
     /**
      * 当前页码
@@ -45,8 +45,8 @@ public class PageResult<T> {
      * @param <T> 泛型类型
      * @return 空分页结果
      */
-    public static <T> PageResult<T> empty(Long pageNo, Long pageSize) {
-        return new PageResult<>(
+    public static <T> OrderPageResult<T> empty(Long pageNo, Long pageSize) {
+        return new OrderPageResult<>(
                 pageNo,
                 pageSize,
                 0L,

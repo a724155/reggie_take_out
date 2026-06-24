@@ -2,7 +2,7 @@ package com.itheima.reggie.service;
 
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.PageResult;
+import com.itheima.reggie.api.response.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 
 import java.time.LocalDateTime;
@@ -20,7 +20,7 @@ public interface IColdChainPayOrderService {
      * @param request  分页查询条件
      * @return 支付单分页数据
      */
-    PageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(Long driverId, DriverPayOrderPageQueryReq request);
+    OrderPageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(Long driverId, DriverPayOrderPageQueryReq request);
 
     /**
      * 分批查询超时但仍处于待支付状态的支付单

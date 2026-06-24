@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.PageResult;
+import com.itheima.reggie.api.response.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 import com.itheima.reggie.enums.ColdChainPayStatusEnum;
 import com.itheima.reggie.mapper.IColdChainPayOrderMapper;
@@ -72,10 +72,10 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
      * @return 支付单分页数据
      */
     @Override
-    public PageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(Long driverId, DriverPayOrderPageQueryReq request) {
+    public OrderPageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(Long driverId, DriverPayOrderPageQueryReq request) {
 
         if (Objects.isNull(driverId)) {
-            return PageResult.empty(DEFAULT_PAGE_NO, DEFAULT_PAGE_SIZE);
+            return OrderPageResult.empty(DEFAULT_PAGE_NO, DEFAULT_PAGE_SIZE);
         }
 
         Long pageNo = buildPageNo(request);
@@ -115,7 +115,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
         List<ColdChainPayOrderDO> payOrderList = resultPage.getRecords();
         if (CollectionUtils.isEmpty(payOrderList)) {
-            return PageResult.empty(pageNo, pageSize);
+            return OrderPageResult.empty(pageNo, pageSize);
         }
 
         List<DriverPayOrderPageVO> pageVOList = new ArrayList<>();
@@ -132,7 +132,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
             }
         }
 
-        return new PageResult<>(pageNo, pageSize, resultPage.getTotal(), pageVOList);
+        return new OrderPageResult<>(pageNo, pageSize, resultPage.getTotal(), pageVOList);
     }
 
 

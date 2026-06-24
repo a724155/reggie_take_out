@@ -3,7 +3,7 @@ package com.itheima.reggie.controller;
 
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.PageResult;
+import com.itheima.reggie.api.response.OrderPageResult;
 import com.itheima.reggie.service.IColdChainPayOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,7 @@ public class ColdChainDriverPayOrderController {
      * @return 支付单分页列表
      */
     @GetMapping
-    public PageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(@RequestAttribute("currentDriverId") Long driverId, @ModelAttribute DriverPayOrderPageQueryReq request) {
+    public OrderPageResult<DriverPayOrderPageVO> queryDriverPayOrderPage(@RequestAttribute("currentDriverId") Long driverId, @ModelAttribute DriverPayOrderPageQueryReq request) {
         return coldChainPayOrderService.queryDriverPayOrderPage(driverId, request);
     }
 }
