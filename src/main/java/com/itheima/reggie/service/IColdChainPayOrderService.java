@@ -2,7 +2,7 @@ package com.itheima.reggie.service;
 
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.OrderPageResult;
+import com.itheima.reggie.common.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 
 import java.time.LocalDateTime;

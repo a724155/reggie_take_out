@@ -3,7 +3,7 @@ package com.itheima.reggie.controller;
 
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.OrderPageResult;
+import com.itheima.reggie.common.OrderPageResult;
 import com.itheima.reggie.service.IColdChainPayOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;

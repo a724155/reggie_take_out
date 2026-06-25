@@ -52,6 +52,12 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- 参数校验：@NotNull、@NotBlank、@Min、@Max、@Valid 等 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-boot-starter</artifactId>

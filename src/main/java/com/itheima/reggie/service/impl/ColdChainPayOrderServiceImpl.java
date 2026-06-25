@@ -5,7 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
-import com.itheima.reggie.api.response.OrderPageResult;
+import com.itheima.reggie.common.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 import com.itheima.reggie.enums.ColdChainPayStatusEnum;
 import com.itheima.reggie.mapper.IColdChainPayOrderMapper;
@@ -132,7 +132,9 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
             }
         }
 
-        return new OrderPageResult<>(pageNo, pageSize, resultPage.getTotal(), pageVOList);
+        OrderPageResult<DriverPayOrderPageVO> driverPayOrderPageVOOrderPageResult = new OrderPageResult<>(pageNo, pageSize, resultPage.getTotal(), pageVOList);
+
+        return driverPayOrderPageVOOrderPageResult;
     }
 
 

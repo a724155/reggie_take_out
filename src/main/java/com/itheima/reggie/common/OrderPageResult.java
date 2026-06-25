@@ -1,4 +1,4 @@
-package com.itheima.reggie.api.response;
+package com.itheima.reggie.common;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -46,11 +46,6 @@ public class OrderPageResult<T> {
      * @return 空分页结果
      */
     public static <T> OrderPageResult<T> empty(Long pageNo, Long pageSize) {
-        return new OrderPageResult<>(
-                pageNo,
-                pageSize,
-                0L,
-                Collections.emptyList()
-        );
+        return new OrderPageResult<>(pageNo, pageSize, 0L, Collections.emptyList());
     }
 }
