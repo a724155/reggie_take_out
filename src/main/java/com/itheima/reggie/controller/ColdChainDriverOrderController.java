@@ -1,22 +1,25 @@
 package com.itheima.reggie.controller;
 
+import com.baomidou.mybatisplus.extension.api.R;
 import com.itheima.reggie.api.request.DriverCancelOrderReq;
 import com.itheima.reggie.api.request.DriverOrderPageQueryReq;
 import com.itheima.reggie.api.request.DriverPaySubmitReq;
-import com.itheima.reggie.api.response.ColdChainOrderDetailVO;
-import com.itheima.reggie.api.response.ColdChainOrderPageVO;
-import com.itheima.reggie.api.response.DriverPayOrderVO;
-import com.itheima.reggie.api.response.PaySubmitVO;
+import com.itheima.reggie.api.response.*;
+import com.itheima.reggie.common.ColdChainRequestAttributeConstants;
 import com.itheima.reggie.common.PageResult;
 import com.itheima.reggie.common.YmmResult;
+import com.itheima.reggie.dto.ColdChainDriverOrderPageQueryReq;
 import com.itheima.reggie.service.IColdChainDriverOrderService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
 import javax.validation.constraints.Positive;
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -36,6 +39,7 @@ import java.util.List;
  * 4. 状态机推进；
  * 5. 幂等更新逻辑。
  */
+@Slf4j
 @RestController
 @RequestMapping("/cold-chain/driver/orders")
 @Validated
@@ -320,5 +324,54 @@ public class ColdChainDriverOrderController {
 
         // 取消成功后不需要额外业务数据，因此返回 YmmResult<Void>。
         return YmmResult.success();
+    }
+
+    /**
+     * 查询当前司机的冷运订单分页列表。
+     *
+     * 请求示例：
+     * GET /cold-chain/driver/orders?pageNo=1&pageSize=10
+     *
+     * 司机 ID 不从前端 URL 参数中获取，
+     * 而是由 ColdChainDriverLoginInterceptor 写入 request attribute。
+     *
+     * @param driverId 当前登录司机 ID
+     * @param request 分页查询参数
+     * @return 当前司机的订单分页数据
+     */
+    @GetMapping
+    public YmmResult<PageResult<ColdChainDriverOrderPageVO>> queryDriverOrderPage(@RequestAttribute(ColdChainRequestAttributeConstants.CURRENT_DRIVER_ID) Long driverId,
+                                                                                  @ModelAttribute ColdChainDriverOrderPageQueryReq request) {
+
+        log.info("查询冷运司机订单列表，driverId={}，pageNo={}，pageSize={}，orderStatus={}", driverId, request.getPageNo(), request.getPageSize(), request.getOrderStatus());
+
+        /**
+         * 当前阶段暂不接数据库。
+         *
+         * 这里构造模拟数据，验证：
+         * 1. 拦截器是否成功注入 driverId；
+         * 2. URL 参数是否绑定到了 request；
+         * 3. Controller 是否能正常返回 JSON。
+         */
+        List<ColdChainDriverOrderPageVO> orderPageVOList = new ArrayList<>();
+
+        orderPageVOList.add(new ColdChainDriverOrderPageVO(900001L, "冷冻猪肉", "上海市嘉定区", "杭州市余杭区",
+                        new BigDecimal("13.00"), 10, "待支付定金"));
+
+        orderPageVOList.add(new ColdChainDriverOrderPageVO(900002L, "生鲜蔬菜", "南京市江宁区", "苏州市吴中区",
+                        new BigDecimal("20.00"), 20, "运输中"));
+
+        /**
+         * 当前先固定返回两条模拟订单。
+         *
+         * 后续接入 Service 后，这里只负责：
+         * 1. 接收参数；
+         * 2. 获取当前司机身份；
+         * 3. 调用 Service；
+         * 4. 返回结果。
+         */
+        PageResult<ColdChainDriverOrderPageVO> pageResult = new PageResult<>(orderPageVOList, 2L, 1, 20);
+
+        return YmmResult.success(pageResult);
     }
 }
