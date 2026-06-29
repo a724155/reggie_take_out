@@ -66,6 +66,10 @@ public class WebMvcConfig extends WebMvcConfigurationSupport {
          * /cold-chain/driver/orders/10001
          * /cold-chain/driver/orders/10001/pay
          */
-        registry.addInterceptor(coldChainDriverLoginInterceptor).addPathPatterns("/cold-chain/driver/orders","/cold-chain/driver/orders/**");
+        registry.addInterceptor(coldChainDriverLoginInterceptor).addPathPatterns(
+                "/cold-chain/driver/orders",
+                "/cold-chain/driver/orders/**",
+                "/cold-chain/driver/coupons",
+                "/cold-chain/driver/coupons/**");
     }
 }

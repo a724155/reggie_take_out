@@ -1,13 +1,9 @@
 package com.itheima.reggie.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Date;
 
 
 /**
@@ -17,13 +13,11 @@ import java.util.Date;
  * cold_chain_order
  */
 @Data
-@TableName("cold_chain_order")
 public class ColdChainOrderDO {
 
     /**
      * 冷运订单主键。
      */
-    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
