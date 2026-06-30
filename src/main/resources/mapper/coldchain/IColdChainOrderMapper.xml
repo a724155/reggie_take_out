@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itheima.reggie.mapper.IColdChainOrderMapper">
+    <resultMap id="ColdChainOrderResultMap" type="com.itheima.reggie.entity.ColdChainOrderDO">
+        <id column="id" property="id"/>
+
+        <result column="order_no" property="orderNo"/>
+        <result column="driver_id" property="driverId"/>
+        <result column="cargo_name" property="cargoName"/>
+        <result column="start_address" property="startAddress"/>
+        <result column="end_address" property="endAddress"/>
+        <result column="deposit_amount" property="depositAmount"/>
+        <result column="order_status" property="orderStatus"/>
+        <result column="cargo_lock_status" property="cargoLockStatus"/>
+        <result column="cargo_lock_expire_time" property="cargoLockExpireTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="BaseColumnList">
+        id,
+        order_no,
+        driver_id,
+        cargo_name,
+        start_address,
+        end_address,
+        deposit_amount,
+        order_status,
+        cargo_lock_status,
+        cargo_lock_expire_time,
+        create_time,
+        update_time
+    </sql>
+
+    <!--
+        查询订单并加行锁。
+        FOR UPDATE 只在事务中有效。
+        当前 Service 方法上必须有：
+        @Transactional(rollbackFor = Exception.class)
+        否则 SQL 执行结束后锁就会立刻释放，
+        无法达到防并发创建支付单的目的。
+    -->
+    <select id="selectByIdForUpdate" resultMap="ColdChainOrderResultMap">
+        SELECT
+        <include refid="BaseColumnList"/>
+        FROM cold_chain_order
+        WHERE id = #{orderId}
+        FOR UPDATE
+    </select>
+
+    <!--
+        条件更新订单状态。
+
+        sourceOrderStatus 是幂等和状态机保护。
+
+        例如：
+        只有状态仍然是“待支付定金”时，
+        才允许更新成“定金已支付”。
+
+        如果订单状态已被其他请求推进，
+        updateCount 会返回 0，
+        Service 必须把它当成异常处理。
+    -->
+    <update id="updateOrderStatus">
+        UPDATE cold_chain_order
+        SET order_status = #{targetOrderStatus}
+        WHERE id = #{orderId}
+          AND driver_id = #{driverId}
+          AND order_status = #{sourceOrderStatus}
+    </update>
+
+
+</mapper>

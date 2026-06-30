@@ -8,7 +8,7 @@ import com.itheima.reggie.api.response.DriverPayOrderPageVO;
 import com.itheima.reggie.common.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 import com.itheima.reggie.enums.ColdChainPayStatusEnum;
-import com.itheima.reggie.mapper.IColdChainPayOrderMapper;
+import com.itheima.reggie.mapper.IColdChainPayOrderMapperPlus;
 import com.itheima.reggie.service.IColdChainPayOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,7 +62,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
      * 该 Mapper 继承 BaseMapper，
      * 不需要 XML 也能调用 selectPage、update 等通用方法。
      */
-    private final IColdChainPayOrderMapper coldChainPayOrderMapper;
+    private final IColdChainPayOrderMapperPlus coldChainPayOrderMapper;
 
     /**
      * 查询司机自己的支付单分页列表
@@ -225,7 +225,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
         /**
          * 只扫描已超过支付截止时间的支付单。
          */
-        queryWrapper.le(ColdChainPayOrderDO::getPayExpireTime, currentTime);
+        queryWrapper.le(ColdChainPayOrderDO::getExpireTime, currentTime);
 
         /**
          * 使用 ID 游标式扫描，避免传统 offset 深分页。
@@ -326,7 +326,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
          *
          * 只有真正到期的支付单才能被关闭。
          */
-        updateWrapper.le(ColdChainPayOrderDO::getPayExpireTime, currentTime);
+        updateWrapper.le(ColdChainPayOrderDO::getExpireTime, currentTime);
         return updateWrapper;
     }
 
@@ -374,11 +374,11 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
         queryWrapper.select(
                 ColdChainPayOrderDO::getId,
                 ColdChainPayOrderDO::getPayOrderNo,
-                ColdChainPayOrderDO::getBusinessOrderId,
-                ColdChainPayOrderDO::getCargoId,
+                ColdChainPayOrderDO::getOrderId,
+                ColdChainPayOrderDO::getId,
                 ColdChainPayOrderDO::getPayAmount,
                 ColdChainPayOrderDO::getPayStatus,
-                ColdChainPayOrderDO::getPayExpireTime,
+                ColdChainPayOrderDO::getExpireTime,
                 ColdChainPayOrderDO::getPaidTime,
                 ColdChainPayOrderDO::getCreateTime
         );
@@ -434,11 +434,11 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
         pageVO.setPayOrderId(payOrderDO.getId());
         pageVO.setPayOrderNo(payOrderDO.getPayOrderNo());
-        pageVO.setBusinessOrderId(payOrderDO.getBusinessOrderId());
-        pageVO.setCargoId(payOrderDO.getCargoId());
+        pageVO.setBusinessOrderId(payOrderDO.getOrderId());
+        pageVO.setCargoId(payOrderDO.getId());
         pageVO.setPayAmount(payOrderDO.getPayAmount());
         pageVO.setPayStatus(payOrderDO.getPayStatus());
-        pageVO.setPayExpireTime(payOrderDO.getPayExpireTime());
+        pageVO.setPayExpireTime(payOrderDO.getExpireTime());
         pageVO.setPaidTime(payOrderDO.getPaidTime());
         pageVO.setCreateTime(payOrderDO.getCreateTime());
 

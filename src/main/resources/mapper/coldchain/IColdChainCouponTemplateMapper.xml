@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itheima.reggie.mapper.IColdChainCouponTemplateMapper">
+    <!--
+        resultMap 的作用：
+
+        将数据库下划线字段：
+        coupon_name、discount_amount、receive_start_time
+
+        映射成 Java 驼峰字段：
+        couponName、discountAmount、receiveStartTime
+    -->
+    <resultMap id="ColdChainCouponTemplateResultMap" type="com.itheima.reggie.entity.ColdChainCouponTemplateDO">
+
+        <id column="id" property="id"/>
+
+        <result column="coupon_name" property="couponName"/>
+        <result column="coupon_type" property="couponType"/>
+        <result column="discount_amount" property="discountAmount"/>
+        <result column="threshold_amount" property="thresholdAmount"/>
+        <result column="total_count" property="totalCount"/>
+        <result column="remain_count" property="remainCount"/>
+        <result column="receive_start_time" property="receiveStartTime"/>
+        <result column="receive_end_time" property="receiveEndTime"/>
+        <result column="valid_days" property="validDays"/>
+        <result column="template_status" property="templateStatus"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <!--
+        公共字段片段。
+        后续所有查询都复用这段字段，
+        避免手写 SELECT *。
+        企业项目一般不建议滥用 SELECT *，
+        因为表后续新增字段、联合查询字段冲突时容易有问题。
+    -->
+    <sql id="BaseColumnList">
+        id,
+        coupon_name,
+        coupon_type,
+        discount_amount,
+        threshold_amount,
+        total_count,
+        remain_count,
+        receive_start_time,
+        receive_end_time,
+        valid_days,
+        template_status,
+        create_time,
+        update_time
+    </sql>
+
+    <!-- 根据模板 ID 查询优惠券模板 -->
+    <select id="selectById" resultMap="ColdChainCouponTemplateResultMap">
+
+        SELECT <include refid="BaseColumnList"/>
+        FROM cold_chain_coupon_template
+        WHERE id = #{templateId}
+
+    </select>
+
+    <!--
+        原子扣减优惠券库存。
+
+        这里绝不能写成：
+
+        先 SELECT remain_count
+        Java 判断 remain_count > 0
+        再 UPDATE remain_count = remain_count - 1
+
+        因为两个线程可能同时读到 remain_count = 1，
+        然后都通过判断，最终超发。
+
+        正确做法：
+
+        直接通过一条 UPDATE 完成：
+        扣库存 + 校验库存 + 校验状态 + 校验领取时间。
+
+        数据库会保证更新操作的原子性。
+    -->
+    <update id="decreaseRemainCountForClaim">
+
+        UPDATE cold_chain_coupon_template
+        SET remain_count = remain_count - 1
+        WHERE id = #{templateId}
+          AND template_status = 1
+          AND remain_count > 0
+          AND receive_start_time &lt;= #{currentTime}
+          AND receive_end_time &gt; #{currentTime}
+
+    </update>
+
+
+
+
+</mapper>

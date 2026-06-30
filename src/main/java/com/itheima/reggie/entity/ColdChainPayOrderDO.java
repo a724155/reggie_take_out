@@ -82,6 +82,11 @@ public class ColdChainPayOrderDO {
     private String channelTradeNo;
 
     /**
+     * 关单原因
+     */
+    private String closeReason;
+
+    /**
      * 支付成功时间。
      */
     private LocalDateTime paidTime;

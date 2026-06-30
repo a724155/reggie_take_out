@@ -84,4 +84,14 @@ public class ColdChainDriverCouponDO {
      * 最终使用时间。
      */
     private LocalDateTime usedTime;
+
+    /**
+     * 创建时间。
+     */
+    private LocalDateTime createTime;
+
+    /**
+     * 更新时间。
+     */
+    private LocalDateTime updateTime;
 }

@@ -67,4 +67,14 @@ public class ColdChainCouponTemplateDO {
      * 模板状态：1启用，0停用。
      */
     private Integer templateStatus;
+
+    /**
+     * 创建时间。
+     */
+    private LocalDateTime createTime;
+
+    /**
+     * 更新时间。
+     */
+    private LocalDateTime updateTime;
 }

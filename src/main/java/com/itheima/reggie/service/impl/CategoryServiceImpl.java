@@ -8,7 +8,6 @@ import com.itheima.reggie.entity.ColdChainOrderDO;
 import com.itheima.reggie.entity.Dish;
 import com.itheima.reggie.entity.Setmeal;
 import com.itheima.reggie.mapper.CategoryMapper;
-import com.itheima.reggie.mapper.IColdChainOrderMapper;
 import com.itheima.reggie.service.CategoryService;
 import com.itheima.reggie.service.DishService;
 import com.itheima.reggie.service.SetmealService;
@@ -28,8 +27,6 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper,Category> im
     @Autowired
     private SetmealService setmealService;
 
-    @Autowired
-    private IColdChainOrderMapper coldChainOrderMapper;
     /**
      * 根据id删除分类，删除之前需要进行判断
      * @param id
@@ -57,12 +54,11 @@ public class CategoryServiceImpl extends ServiceImpl<CategoryMapper,Category> im
             throw new CustomException("当前分类下关联了套餐，不能删除");
         }
 
-        coldChainOrderMapper.selectById(id);
-        LambdaQueryWrapper<ColdChainOrderDO> queryWrapper = new LambdaQueryWrapper<>();
+        /*LambdaQueryWrapper<ColdChainOrderDO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(ColdChainOrderDO::getDriverId, id);
         queryWrapper.orderByDesc(ColdChainOrderDO::getCreateTime);
         List<ColdChainOrderDO> coldChainOrderDOList = Optional.ofNullable(coldChainOrderMapper.selectList(queryWrapper))
-                .orElse(Collections.emptyList());
+                .orElse(Collections.emptyList());*/
         //正常删除分类
         super.removeById(id);
     }

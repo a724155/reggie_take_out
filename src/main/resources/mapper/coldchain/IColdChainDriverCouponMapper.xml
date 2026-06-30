@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itheima.reggie.mapper.IColdChainDriverCouponMapper">
+    <resultMap id="ColdChainDriverCouponResultMap" type="com.itheima.reggie.entity.ColdChainDriverCouponDO">
+        <id column="id" property="id"/>
+
+        <result column="template_id" property="templateId"/>
+        <result column="driver_id" property="driverId"/>
+        <result column="coupon_name" property="couponName"/>
+        <result column="discount_amount" property="discountAmount"/>
+        <result column="threshold_amount" property="thresholdAmount"/>
+        <result column="valid_start_time" property="validStartTime"/>
+        <result column="valid_end_time" property="validEndTime"/>
+        <result column="coupon_status" property="couponStatus"/>
+        <result column="lock_order_id" property="lockOrderId"/>
+        <result column="lock_expire_time" property="lockExpireTime"/>
+        <result column="used_order_id" property="usedOrderId"/>
+        <result column="used_time" property="usedTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="BaseColumnList">
+        id,
+        template_id,
+        driver_id,
+        coupon_name,
+        discount_amount,
+        threshold_amount,
+        valid_start_time,
+        valid_end_time,
+        coupon_status,
+        lock_order_id,
+        lock_expire_time,
+        used_order_id,
+        used_time,
+        create_time,
+        update_time
+    </sql>
+
+    <select id="selectById" resultMap="ColdChainDriverCouponResultMap">
+        SELECT <include refid="BaseColumnList"></include>
+        FROM cold_chain_driver_coupon
+        WHERE id = #{driverCouponId}
+    </select>
+
+
+    <!-- 查询某个司机是否已经领取指定模板 -->
+    <select id="selectByTemplateIdAndDriverId" resultMap="ColdChainDriverCouponResultMap">
+        SELECT <include refid="BaseColumnList"></include>
+        FROM cold_chain_driver_coupon
+        WHERE template_id = #{templateId}
+          AND driver_id = #{driverId}
+        LIMIT 1
+    </select>
+
+    <!--
+        插入司机优惠券。
+
+        useGeneratedKeys="true"：
+        表示让 MyBatis 使用 JDBC 自动生成主键能力。
+
+        keyProperty="id"：
+        插入成功后，数据库生成的 id 会回填到：
+
+        driverCouponDO.id
+
+        所以 Service 中可以直接通过：
+        driverCouponDO.getId()
+
+        获取新生成的司机优惠券 ID。
+    -->
+    <insert id="insertDriverCoupon" parameterType="com.itheima.reggie.entity.ColdChainDriverCouponDO"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO cold_chain_driver_coupon (template_id,
+                                              driver_id,
+                                              coupon_name,
+                                              discount_amount,
+                                              threshold_amount,
+                                              valid_start_time,
+                                              valid_end_time,
+                                              coupon_status,
+                                              lock_order_id,
+                                              lock_expire_time,
+                                              used_order_id,
+                                              used_time)
+        VALUES (#{templateId},
+                #{driverId},
+                #{couponName},
+                #{discountAmount},
+                #{thresholdAmount},
+                #{validStartTime},
+                #{validEndTime},
+                #{couponStatus},
+                #{lockOrderId},
+                #{lockExpireTime},
+                #{usedOrderId},
+                #{usedTime})
+    </insert>
+
+    <!--
+        原子锁券。
+
+        关键条件：
+
+        1. driver_id = 当前司机 ID
+           防止司机 A 使用司机 B 的优惠券。
+
+        2. coupon_status = 10
+           只有“未使用”状态才允许锁定。
+
+        3. valid_start_time <= 当前时间
+           优惠券必须已生效。
+
+        4. valid_end_time > 当前时间
+           优惠券不能过期。
+
+        5. threshold_amount <= 当前订单金额
+           订单金额必须达到优惠券使用门槛。
+
+        即使 Java 代码前面做了校验，
+        SQL 这里也必须再校验一次。
+
+        因为 Java 查询与数据库更新之间，可能有别的线程修改了数据。
+    -->
+    <update id="lockCouponForPay">
+        UPDATE cold_chain_driver_coupon
+        SET coupon_status = 20,
+            lock_order_id = #{orderId},
+            lock_expire_time = #{lockExpireTime}
+        WHERE id = #{driverCouponId}
+          AND driver_id = #{driverId}
+          AND coupon_status = 10
+          AND valid_start_time &lt;= #{currentTime}
+          AND valid_end_time &gt; #{currentTime}
+          AND threshold_amount &lt;= #{orderAmount}
+    </update>
+
+    <!--
+        支付成功后核销已锁定优惠券。
+
+        核心保障：
+
+        coupon_status = 20
+        AND lock_order_id = 当前订单 ID
+
+        不仅要确认优惠券是锁定状态，
+        还必须确认它锁定的就是当前支付成功订单。
+    -->
+    <update id="consumeLockedCoupon">
+        UPDATE cold_chain_driver_coupon
+        SET coupon_status = 30,
+            used_order_id = #{orderId},
+            used_time = #{usedTime},
+            lock_order_id = NULL,
+            lock_expire_time = NULL
+        WHERE id = #{driverCouponId}
+          AND driver_id = #{driverId}
+          AND coupon_status = 20
+          AND lock_order_id = #{orderId}
+    </update>
+
+    <!--
+        支付超时后释放优惠券。
+        注意：
+        释放时不能只根据 driverCouponId 更新。
+        必须额外校验：
+        当前司机 ID
+        当前锁定订单 ID
+        当前状态为 LOCKED
+        否则会有误释放风险。
+    -->
+    <update id="releaseLockedCoupon">
+        UPDATE cold_chain_driver_coupon
+        SET coupon_status = 10,
+            lock_order_id = NULL,
+            lock_expire_time = NULL
+        WHERE id = #{driverCouponId}
+          AND driver_id = #{driverId}
+          AND coupon_status = 20
+          AND lock_order_id = #{orderId}
+    </update>
+
+</mapper>
