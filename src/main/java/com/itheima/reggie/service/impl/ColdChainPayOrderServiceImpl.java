@@ -833,7 +833,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
          *
          * 前缀匹配比 '%PAY2026%' 更容易利用索引。
          */
-        queryWrapper.likeRight(StringUtils.hasText(payOrderNo), ColdChainPayOrderDO::getPayOrderNo, payOrderNo);
+        queryWrapper.likeRight(org.springframework.util.StringUtils.hasText(payOrderNo), ColdChainPayOrderDO::getPayOrderNo, payOrderNo);
 
         /**
          * 只查询司机端真正需要的字段。
