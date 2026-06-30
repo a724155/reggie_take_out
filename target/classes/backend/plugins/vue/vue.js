@@ -9072,7 +9072,7 @@
 
   /*  */
 
-  var defaultTagRE = /\{\{((?:.|\r?\n)+?)\}\}/g;
+  var defaultTagRE = /\{\{((?:.|\reggieResult?\n)+?)\}\}/g;
   var regexEscapeRE = /[-.*+?^${}()|[\]\/\\]/g;
 
   var buildRegex = cached(function (delimiters) {
@@ -9551,7 +9551,7 @@
 
   var slotRE = /^v-slot(:|$)|^#/;
 
-  var lineBreakRE = /[\r\n]/;
+  var lineBreakRE = /[\reggieResult\n]/;
   var whitespaceRE$1 = /\s+/g;
 
   var invalidAttributeRE = /[\s"'<>\/=]/;
@@ -11598,7 +11598,7 @@
     if ( start === void 0 ) start = 0;
     if ( end === void 0 ) end = source.length;
 
-    var lines = source.split(/\r?\n/);
+    var lines = source.split(/\reggieResult?\n/);
     var count = 0;
     var res = [];
     for (var i = 0; i < lines.length; i++) {

@@ -3,31 +3,78 @@ package com.itheima.reggie.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.itheima.reggie.api.request.ColdChainCreatePayOrderReq;
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
+import com.itheima.reggie.api.response.ColdChainCreatePayOrderVO;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
+import com.itheima.reggie.common.ColdChainBusinessException;
 import com.itheima.reggie.common.OrderPageResult;
+import com.itheima.reggie.entity.ColdChainDriverCouponDO;
+import com.itheima.reggie.entity.ColdChainOrderDO;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
+import com.itheima.reggie.enums.ColdChainCouponStatusEnum;
+import com.itheima.reggie.enums.ColdChainOrderStatusEnum;
 import com.itheima.reggie.enums.ColdChainPayStatusEnum;
+import com.itheima.reggie.mapper.IColdChainDriverCouponMapper;
+import com.itheima.reggie.mapper.IColdChainOrderMapper;
+import com.itheima.reggie.mapper.IColdChainPayOrderMapper;
 import com.itheima.reggie.mapper.IColdChainPayOrderMapperPlus;
 import com.itheima.reggie.service.IColdChainPayOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
+import org.apache.commons.lang.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 /**
  * 冷运定金支付单服务实现类
  */
+
+/**
+ * 冷运支付单服务实现。
+ *
+ * 这部分是优惠券防资损的核心。
+ *
+ * 创建支付单时：
+ *
+ * 订单加锁
+ *     ↓
+ * 校验司机归属
+ *     ↓
+ * 校验订单状态
+ *     ↓
+ * 校验 / 锁定优惠券
+ *     ↓
+ * 服务端计算优惠金额
+ *     ↓
+ * 创建支付单
+ *
+ * 支付成功时：
+ *
+ * 验签完成
+ *     ↓
+ * 校验金额
+ *     ↓
+ * 支付单 WAIT_PAY -> PAID
+ *     ↓
+ * 优惠券 LOCKED -> USED
+ *     ↓
+ * 订单 WAIT_DEPOSIT_PAY -> DEPOSIT_PAID
+ *
+ * 上面三个状态变更必须处于同一个事务中。
+ */
+
 @Service
 @RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
+
 
     /**
      * 默认页码
@@ -62,7 +109,26 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
      * 该 Mapper 继承 BaseMapper，
      * 不需要 XML 也能调用 selectPage、update 等通用方法。
      */
-    private final IColdChainPayOrderMapperPlus coldChainPayOrderMapper;
+    private final IColdChainPayOrderMapperPlus iColdChainPayOrderMapperPlus;
+
+    /**
+     * 支付单有效期。
+     *
+     * 当前练习设置为 10 分钟。
+     */
+    private static final long PAY_EXPIRE_MINUTES = 10L;
+
+    /**
+     * 支付单号时间格式。
+     */
+    private static final DateTimeFormatter PAY_ORDER_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+
+    private final IColdChainOrderMapper coldChainOrderMapper;
+
+    private final IColdChainDriverCouponMapper coldChainDriverCouponMapper;
+
+    private final IColdChainPayOrderMapper coldChainPayOrderMapper;
+
 
     /**
      * 查询司机自己的支付单分页列表
@@ -111,7 +177,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
          *
          * 在 MySQL 下，最终会拼出 LIMIT。
          */
-        Page<ColdChainPayOrderDO> resultPage = coldChainPayOrderMapper.selectPage(payOrderPage, queryWrapper);
+        Page<ColdChainPayOrderDO> resultPage = iColdChainPayOrderMapperPlus.selectPage(payOrderPage, queryWrapper);
 
         List<ColdChainPayOrderDO> payOrderList = resultPage.getRecords();
         if (CollectionUtils.isEmpty(payOrderList)) {
@@ -161,7 +227,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
         LambdaQueryWrapper<ColdChainPayOrderDO> queryWrapper = getExpiredWaitPayOrderListQueryWrapper(currentTime, safeLastPayOrderId, safeLimit);
 
-        List<ColdChainPayOrderDO> payOrderList = coldChainPayOrderMapper.selectList(queryWrapper);
+        List<ColdChainPayOrderDO> payOrderList = iColdChainPayOrderMapperPlus.selectList(queryWrapper);
 
         return CollectionUtils.isEmpty(payOrderList) ? Collections.emptyList() : payOrderList;
     }
@@ -183,7 +249,7 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
         }
 
         LambdaUpdateWrapper<ColdChainPayOrderDO> updateWrapper = getclosePayOrderIfWaitingAndExpiredUpdateWrapper(payOrderId, currentTime);
-        int affectedRows = coldChainPayOrderMapper.update(null, updateWrapper);
+        int affectedRows = iColdChainPayOrderMapperPlus.update(null, updateWrapper);
 
         return affectedRows == 1;
     }
@@ -209,10 +275,414 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
         LambdaUpdateWrapper<ColdChainPayOrderDO> updateWrapper = getmarkPayOrderPaidIfWaitingUpdateWrapper(payOrderId, paidTime);
 
-        int affectedRows = coldChainPayOrderMapper.update(null, updateWrapper);
+        int affectedRows = iColdChainPayOrderMapperPlus.update(null, updateWrapper);
 
         return affectedRows == 1;
     }
+
+
+
+    /**
+     * 创建支付单。
+     *
+     * 关键防护：
+     * 1. 当前司机 ID 来自拦截器，不信任前端；
+     * 2. 原始定金从订单表读取，不信任前端；
+     * 3. 优惠金额由后端计算，不信任前端；
+     * 4. 司机优惠券必须属于当前司机；
+     * 5. 优惠券使用条件更新完成原子锁定；
+     * 6. 订单行加锁，避免重复创建支付单；
+     * 7. 数据库唯一索引做最终幂等兜底。
+     *
+     * @param driverId 当前登录司机 ID
+     * @param orderId 冷运订单 ID
+     * @param request 创建支付单请求
+     * @return 支付单信息
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ColdChainCreatePayOrderVO createPayOrder(Long driverId, Long orderId, ColdChainCreatePayOrderReq request) {
+
+        if (driverId == null || driverId <= 0) {
+            throw new ColdChainBusinessException("当前司机身份非法");
+        }
+
+        if (orderId == null || orderId <= 0) {
+            throw new ColdChainBusinessException("订单ID非法");
+        }
+
+        if (Objects.isNull(request) || StringUtils.isBlank(request.getRequestNo()) || StringUtils.isBlank(request.getRequestNo().trim())) {
+            throw new ColdChainBusinessException("请求幂等号不能为空");
+        }
+
+        String requestNo = request.getRequestNo().trim();
+
+        /**
+         * 第一层幂等：
+         * 同一个 requestNo 重试，直接返回历史支付单。
+         * 前端必须做到：第一次点击“去支付”生成 UUID；网络超时重试时继续使用同一个 UUID；不能每次重试都生成新的 requestNo。
+         */
+        ColdChainPayOrderDO existedRequestPayOrderDO = coldChainPayOrderMapper.selectByRequestNo(requestNo);
+        if (!Objects.isNull(existedRequestPayOrderDO)) {
+            validateExistingPayOrder(existedRequestPayOrderDO, driverId, orderId);
+            return buildCreatePayOrderVO(existedRequestPayOrderDO);
+        }
+
+        /*
+          锁订单行。这一步非常重要。同一订单的多个创建支付单请求，必须串行执行。
+         */
+        ColdChainOrderDO orderDO = coldChainOrderMapper.selectByIdForUpdate(orderId);
+        if (Objects.isNull(orderDO)) {
+            throw new ColdChainBusinessException("订单不存在");
+        }
+
+        /**
+         * 防止水平越权。
+         * 司机 A 不能通过修改 URL 里的 orderId，为司机 B 的订单创建支付单。
+         */
+        if (!Objects.equals(orderDO.getDriverId(), driverId)) {
+            throw new ColdChainBusinessException("无权操作该订单");
+        }
+
+        if (!Objects.equals(orderDO.getOrderStatus(), ColdChainOrderStatusEnum.WAIT_DEPOSIT_PAY.getCode())) {
+            throw new ColdChainBusinessException("当前订单不允许创建支付单");
+        }
+
+        if (orderDO.getDepositAmount() == null || orderDO.getDepositAmount().signum() <= 0) {
+            throw new ColdChainBusinessException("订单定金金额异常");
+        }
+
+        /**
+         * 第二层幂等：
+         * 即使用户换了一个 requestNo，同一个订单也不能创建第二笔支付单。
+         */
+        ColdChainPayOrderDO existedOrderPayOrderDO = coldChainPayOrderMapper.selectByOrderId(orderId);
+        if (existedOrderPayOrderDO != null) {
+
+            /*
+              当前练习约束：
+              一个订单支付单关闭后，不允许直接再创建。真实业务里可能需要重新抢单、重新锁货，再生成新订单或新支付单。
+             */
+            if (Objects.equals(existedOrderPayOrderDO.getPayStatus(), ColdChainPayStatusEnum.CLOSED.getCode())) {
+                throw new ColdChainBusinessException("支付单已关闭，请重新发起业务流程");
+            }
+
+            return buildCreatePayOrderVO(existedOrderPayOrderDO);
+        }
+
+        BigDecimal originalAmount = orderDO.getDepositAmount();
+        /*
+          不使用优惠券时，优惠金额固定为 0。
+         */
+        BigDecimal couponDiscountAmount = BigDecimal.ZERO;
+        Long driverCouponId = request.getDriverCouponId();
+        LocalDateTime currentTime = LocalDateTime.now();
+        LocalDateTime expireTime = currentTime.plusMinutes(PAY_EXPIRE_MINUTES);
+
+        /*
+          当前司机选择使用优惠券。
+         */
+        if (driverCouponId != null) {
+
+            /**
+             * 读取优惠券快照。
+             * 注意：这一步只用于读取金额、做友好校验。
+             * 真正防并发的一步，是后面的 UPDATE ... WHERE coupon_status = 10。
+             */
+            ColdChainDriverCouponDO driverCouponDO = coldChainDriverCouponMapper.selectById(driverCouponId);
+
+            validateCouponCanBeUsed(driverCouponDO, driverId, originalAmount, currentTime);
+
+            /**
+             * 优惠金额必须由服务端计算。
+             *
+             * 前端只允许传：
+             * driverCouponId
+             *
+             * 前端绝不能传：
+             * couponDiscountAmount
+             * payAmount
+             * originalAmount
+             *
+             * 否则用户可以通过抓包，把：
+             * payAmount = 8
+             * 篡改为：
+             * payAmount = 0.01
+             */
+            couponDiscountAmount = calculateCouponDiscount(driverCouponDO, originalAmount);
+
+            /**
+             * 原子锁券。
+             *
+             * 这里才是同一张券防重复使用的最终保障。
+             *
+             * 两个订单同时使用同一张券时：
+             *
+             * 第一个 UPDATE 成功，返回 1；
+             * 第二个 UPDATE 因 coupon_status 已变为 LOCKED，返回 0。
+             */
+            int lockCouponCount = coldChainDriverCouponMapper.lockCouponForPay(
+                    driverCouponId,
+                    driverId,
+                    orderId,
+                    originalAmount,
+                    expireTime,
+                    currentTime
+            );
+
+            if (lockCouponCount != 1) {
+                throw new ColdChainBusinessException("优惠券已被使用、锁定、过期或不满足使用条件");
+            }
+        }
+        /**
+         * 实付金额 = 原始定金 - 服务端计算出的优惠金额。
+         */
+        BigDecimal payAmount = originalAmount.subtract(couponDiscountAmount);
+
+        /**
+         * 当前练习暂不实现零元支付。所以要求优惠后金额必须大于 0。
+         * 后续扩展零元支付时：不需要调第三方支付渠道；直接走“支付成功 + 核销券 + 推进订单”的本地事务。
+         */
+        if (payAmount.signum() <= 0) {
+            throw new ColdChainBusinessException("优惠金额异常，当前暂不支持零元支付");
+        }
+
+        ColdChainPayOrderDO payOrderDO = new ColdChainPayOrderDO();
+        payOrderDO.setPayOrderNo(generatePayOrderNo());
+        payOrderDO.setRequestNo(requestNo);
+        payOrderDO.setOrderId(orderId);
+        payOrderDO.setDriverId(driverId);
+        payOrderDO.setOriginalAmount(originalAmount);
+        payOrderDO.setDriverCouponId(driverCouponId);
+        payOrderDO.setCouponDiscountAmount(couponDiscountAmount);
+        payOrderDO.setPayAmount(payAmount);
+        payOrderDO.setPayStatus(ColdChainPayStatusEnum.WAIT_PAY.getCode());
+        payOrderDO.setExpireTime(expireTime);
+
+        try {
+            int insertCount = coldChainPayOrderMapper.insertPayOrder(payOrderDO);
+            if (insertCount != 1 || payOrderDO.getId() == null) {
+                throw new ColdChainBusinessException("创建支付单失败");
+            }
+        } catch (DuplicateKeyException exception) {
+
+            /**
+             * 这里主要兜底极端并发场景：
+             *
+             * 1. requestNo 被重复使用；
+             * 2. orderId 并发创建支付单；
+             * 3. payOrderNo 极小概率重复。
+             *
+             * 当前事务会回滚。
+             *
+             * 如果前面已经锁券，
+             * 锁券状态也会一起回滚，
+             * 不会遗留“券锁住但支付单没创建”的脏数据。
+             */
+            throw new ColdChainBusinessException("创建支付单失败，请勿重复提交");
+        }
+
+        return buildCreatePayOrderVO(payOrderDO);
+
+    }
+
+    @Override
+    public void handlePaySuccess(String payOrderNo, String channelTradeNo, BigDecimal callbackPayAmount, LocalDateTime channelPaidTime) {
+
+    }
+
+    @Override
+    public void closeExpiredPayOrderAfterChannelConfirmedUnpaid(Long payOrderId) {
+
+    }
+
+    /**
+     * 校验司机优惠券是否可用。
+     *
+     * @param driverCouponDO 司机优惠券
+     * @param driverId 当前司机 ID
+     * @param orderAmount 当前订单定金金额
+     * @param currentTime 当前时间
+     */
+    private void validateCouponCanBeUsed(ColdChainDriverCouponDO driverCouponDO, Long driverId,
+            BigDecimal orderAmount, LocalDateTime currentTime) {
+
+        if (driverCouponDO == null) {
+            throw new ColdChainBusinessException("优惠券不存在");
+        }
+
+        if (!Objects.equals(driverCouponDO.getDriverId(), driverId)) {
+            throw new ColdChainBusinessException("无权使用该优惠券");
+        }
+
+        if (!Objects.equals(driverCouponDO.getCouponStatus(), ColdChainCouponStatusEnum.UNUSED.getCode())) {
+            throw new ColdChainBusinessException("优惠券当前不可使用");
+        }
+
+        if (driverCouponDO.getValidStartTime() == null || driverCouponDO.getValidEndTime() == null) {
+            throw new ColdChainBusinessException("优惠券有效期配置异常");
+        }
+
+        if (driverCouponDO.getValidStartTime().isAfter(currentTime) || !driverCouponDO.getValidEndTime().isAfter(currentTime)) {
+            throw new ColdChainBusinessException("优惠券未生效或已过期");
+        }
+
+        if (driverCouponDO.getThresholdAmount() == null || driverCouponDO.getDiscountAmount() == null) {
+            throw new ColdChainBusinessException("优惠券金额配置异常");
+        }
+
+        if (driverCouponDO.getThresholdAmount().compareTo(orderAmount) > 0) {
+            throw new ColdChainBusinessException("订单金额未达到优惠券使用门槛");
+        }
+    }
+
+    /**
+     * 计算优惠金额。
+     *
+     * 当前只支持固定金额满减券：
+     *
+     * 原始定金 13 元；
+     * 优惠券减 5 元；
+     * 实际支付 8 元。
+     *
+     * @param driverCouponDO 司机优惠券快照
+     * @param originalAmount 原始定金金额
+     * @return 优惠金额
+     */
+    private BigDecimal calculateCouponDiscount(ColdChainDriverCouponDO driverCouponDO, BigDecimal originalAmount) {
+
+        BigDecimal discountAmount = driverCouponDO.getDiscountAmount();
+
+        if (discountAmount == null || discountAmount.signum() <= 0) {
+            throw new ColdChainBusinessException("优惠券金额异常");
+        }
+
+        /**
+         * 当前暂不支持零元支付。
+         *
+         * 所以优惠金额必须小于原始定金。
+         *
+         * 如果以后支持零元支付，
+         * 这里可以允许 discountAmount = originalAmount，
+         * 然后直接走本地支付成功逻辑。
+         */
+        if (discountAmount.compareTo(originalAmount) >= 0) {
+            throw new ColdChainBusinessException("优惠券金额异常，当前暂不支持零元付");
+        }
+
+        return discountAmount;
+    }
+
+    /**
+     * 校验支付渠道回调金额。
+     *
+     * BigDecimal 比较必须使用 compareTo。
+     *
+     * 不要使用 equals。
+     *
+     * 因为：
+     *
+     * new BigDecimal("8.0").equals(new BigDecimal("8.00"))
+     *
+     * 返回 false。
+     *
+     * 但 compareTo 返回 0，表示数值相等。
+     *
+     * @param payOrderDO 本地支付单
+     * @param callbackPayAmount 支付渠道回调金额
+     */
+    private void validatePayAmount(
+            ColdChainPayOrderDO payOrderDO,
+            BigDecimal callbackPayAmount) {
+
+        if (payOrderDO.getPayAmount() == null) {
+            throw new ColdChainBusinessException("本地支付金额异常");
+        }
+
+        if (payOrderDO.getPayAmount()
+                .compareTo(callbackPayAmount) != 0) {
+            throw new ColdChainBusinessException(
+                    "支付回调金额与本地支付金额不一致"
+            );
+        }
+    }
+
+    /**
+     * 校验同一个 requestNo 是否被非法复用。
+     *
+     * @param payOrderDO 已存在支付单
+     * @param driverId 当前司机 ID
+     * @param orderId 当前订单 ID
+     */
+    private void validateExistingPayOrder(ColdChainPayOrderDO payOrderDO, Long driverId, Long orderId) {
+
+        if (!Objects.equals(payOrderDO.getDriverId(), driverId)) {
+            throw new ColdChainBusinessException("请求幂等号归属非法");
+        }
+
+        if (!Objects.equals(payOrderDO.getOrderId(), orderId)) {
+            throw new ColdChainBusinessException("请求幂等号与订单不匹配");
+        }
+    }
+
+    /**
+     * 将数据库支付单转换成前端返回对象。
+     *
+     * @param payOrderDO 支付单
+     * @return 创建支付单返回对象
+     */
+    private ColdChainCreatePayOrderVO buildCreatePayOrderVO(ColdChainPayOrderDO payOrderDO) {
+
+        return new ColdChainCreatePayOrderVO(
+                payOrderDO.getId(),
+                payOrderDO.getPayOrderNo(),
+                payOrderDO.getOriginalAmount(),
+                payOrderDO.getCouponDiscountAmount(),
+                payOrderDO.getPayAmount(),
+                payOrderDO.getExpireTime(),
+                payOrderDO.getPayStatus()
+        );
+    }
+
+    /**
+     * 生成支付单号。
+     *
+     * Java 侧保证随机性，
+     * 数据库 uk_pay_order_no 再做最终唯一性兜底。
+     *
+     * @return 对外支付单号
+     */
+    private String generatePayOrderNo() {
+
+        String timePart =
+                LocalDateTime.now()
+                        .format(PAY_ORDER_TIME_FORMATTER);
+
+        String randomPart =
+                UUID.randomUUID()
+                        .toString()
+                        .replace("-", "")
+                        .substring(0, 8)
+                        .toUpperCase();
+
+        return "CCP" + timePart + randomPart;
+    }
+
+    /**
+     * 判断字符串是否为空或只包含空格。
+     *
+     * @param value 待判断字符串
+     * @return true：为空白字符串
+     */
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+
+
+
+
+
 
     private static LambdaQueryWrapper<ColdChainPayOrderDO> getExpiredWaitPayOrderListQueryWrapper(LocalDateTime currentTime, long safeLastPayOrderId, int safeLimit) {
         LambdaQueryWrapper<ColdChainPayOrderDO> queryWrapper = new LambdaQueryWrapper<>();

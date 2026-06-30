@@ -1,10 +1,13 @@
 package com.itheima.reggie.service;
 
+import com.itheima.reggie.api.request.ColdChainCreatePayOrderReq;
 import com.itheima.reggie.api.request.DriverPayOrderPageQueryReq;
+import com.itheima.reggie.api.response.ColdChainCreatePayOrderVO;
 import com.itheima.reggie.api.response.DriverPayOrderPageVO;
 import com.itheima.reggie.common.OrderPageResult;
 import com.itheima.reggie.entity.ColdChainPayOrderDO;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -53,4 +56,46 @@ public interface IColdChainPayOrderService {
      * @return true：状态推进成功；false：支付单已不是待支付状态
      */
     boolean markPayOrderPaidIfWaiting(Long payOrderId, LocalDateTime paidTime);
+
+
+    /**
+     * 创建支付单。
+     *
+     * @param driverId 当前登录司机 ID
+     * @param orderId 冷运订单 ID
+     * @param request 创建支付单请求
+     * @return 创建成功后的支付单信息
+     */
+    ColdChainCreatePayOrderVO createPayOrder(Long driverId, Long orderId, ColdChainCreatePayOrderReq request);
+
+    /**
+     * 处理支付渠道成功回调。
+     *
+     * 注意：
+     * 调用本方法之前，必须先完成支付渠道验签。
+     *
+     * @param payOrderNo 商户支付单号
+     * @param channelTradeNo 第三方支付渠道流水号
+     * @param callbackPayAmount 支付渠道实际支付金额
+     * @param channelPaidTime 支付渠道记录的实际成功时间
+     */
+    void handlePaySuccess(String payOrderNo, String channelTradeNo, BigDecimal callbackPayAmount, LocalDateTime channelPaidTime);
+
+    /**
+     * 支付超时关闭处理。
+     *
+     * 该方法的前提是：
+     * 已经向支付渠道确认该笔支付最终未支付。
+     *
+     * @param payOrderId 支付单 ID
+     */
+    void closeExpiredPayOrderAfterChannelConfirmedUnpaid(Long payOrderId);
+
+
+
+
+
+
+
+
 }

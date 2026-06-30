@@ -101,7 +101,7 @@ public class ColdChainPayOrderTimeoutJob {
                  * 但 MQ 发送失败，
                  * 导致货源锁未释放。
                  */
-                log.info("冷运支付单超时关闭成功，payOrderId={}, cargoId={}, driverId={}", payOrderDO.getId(), payOrderDO.getCargoId(), payOrderDO.getDriverId());
+                log.info("冷运支付单超时关闭成功，payOrderId={}, cargoId={}, driverId={}", payOrderDO.getId(), payOrderDO.getId(), payOrderDO.getDriverId());
             }
 
             /**
