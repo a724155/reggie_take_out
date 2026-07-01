@@ -93,34 +93,26 @@ public class ColdChainDriverCouponServiceImpl implements IColdChainDriverCouponS
 
         validateCouponTemplate(templateDO, currentTime);
 
-        /**
-         * 先查询一次，给司机友好提示。
-         *
-         * 但此处不能作为最终防重复保障。
-         *
-         * 因为两个并发请求可能同时查到“未领取”。
-         *
-         * 最终防重由数据库唯一索引保证：
-         * uk_template_driver(template_id, driver_id)
+        /*
+          先查询一次，给司机友好提示。但此处不能作为最终防重复保障。
+          因为两个并发请求可能同时查到“未领取”。最终防重由数据库唯一索引保证：uk_template_driver(template_id, driver_id)
          */
         ColdChainDriverCouponDO existedDriverCouponDO = coldChainDriverCouponMapper.selectByTemplateIdAndDriverId(templateId, driverId);
-
         if (!Objects.isNull(existedDriverCouponDO)) {
             throw new ColdChainBusinessException("您已经领取过该优惠券");
         }
 
-        /**
-         * 原子扣减优惠券模板库存。
-         * SQL 中已经包含：
-         * remain_count > 0
-         * template_status = 1
-         * 领取时间范围校验
-         *
-         * 返回 1：扣减成功。
-         * 返回 0：库存不足、券被停用或不在领取时间。
+        /*
+          原子扣减优惠券模板库存。
+          SQL 中已经包含：
+          remain_count > 0
+          template_status = 1
+          领取时间范围校验
+          返回 1：扣减成功。
+          返回 0：库存不足、券被停用或不在领取时间。
          */
         int decreaseCount = coldChainCouponTemplateMapper.decreaseRemainCountForClaim(templateId, currentTime);
-        if (decreaseCount != TEMPLATE_START) {
+        if (decreaseCount != 1) {
             throw new ColdChainBusinessException("优惠券已领完或当前不可领取");
         }
 
@@ -140,25 +132,18 @@ public class ColdChainDriverCouponServiceImpl implements IColdChainDriverCouponS
 
         try {
             int insertCount = coldChainDriverCouponMapper.insertDriverCoupon(driverCouponDO);
-            if (insertCount != TEMPLATE_START || Objects.isNull(driverCouponDO.getId())) {
+            if (insertCount != 1 || Objects.isNull(driverCouponDO.getId())) {
                 throw new ColdChainBusinessException("领取优惠券失败");
             }
             return driverCouponDO.getId();
         } catch (DuplicateKeyException exception) {
             /**
              * 并发领取时的最终兜底。
-             *
              * 例如：
-             *
              * 请求 A 和请求 B 同时判断“司机未领取”；
              * 请求 A 插入成功；
              * 请求 B 触发 uk_template_driver 唯一索引冲突。
-             *
-             * 请求 B 抛出运行时异常后，
-             * 当前事务整体回滚。
-             *
-             * 前面扣减的 remain_count 会自动恢复，
-             * 不会发生“库存少了，但司机没领到券”的资损。
+             * 请求 B 抛出运行时异常后，当前事务整体回滚。前面扣减的 remain_count 会自动恢复，不会发生“库存少了，但司机没领到券”的资损。
              */
             throw new ColdChainBusinessException("您已经领取过该优惠券");
         }

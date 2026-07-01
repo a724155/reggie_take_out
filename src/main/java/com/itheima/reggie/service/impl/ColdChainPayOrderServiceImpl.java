@@ -30,9 +30,11 @@ import org.apache.commons.lang.StringUtils;
 
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Function;
 
 /**
  * 冷运定金支付单服务实现类
@@ -1100,5 +1102,29 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
         pageVO.setPayStatusDesc(ColdChainPayStatusEnum.getDescByCode(payOrderDO.getPayStatus()));
 
         return pageVO;
+    }
+
+    private Function<BigDecimal, BigDecimal> createDepositCalculateFunction(BigDecimal depositRate) {
+        if (Objects.isNull(depositRate)) {
+            throw new IllegalArgumentException("冷运定金比例不能为空");
+        }
+
+        /*
+         * 返回一个定金计算函数。
+         * 此处并没有立即计算具体定金，因为当前还没有传入订单运费。
+         * 返回的 Function 会保存定金比例 depositRate，后续调用 apply() 时再传入运费完成计算。
+         */
+        return freightAmount -> {
+            if (Objects.isNull(freightAmount)) {
+                throw new IllegalArgumentException("冷运订单运费不能为空");
+            }
+
+            /*
+             * 使用订单运费乘以创建函数时传入的定金比例。
+             * 即使 createDepositCalculateFunction() 方法已经执行结束，
+             * 当前 Lambda 仍然可以继续使用外层方法中的 depositRate。
+             */
+            return freightAmount.multiply(depositRate).setScale(2, RoundingMode.HALF_UP);
+        };
     }
 }

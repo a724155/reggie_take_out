@@ -34,18 +34,11 @@ public interface IColdChainCouponTemplateMapper {
 
     /**
      * 原子扣减优惠券库存。
-     *
-     * 该 SQL 的核心条件是：
-     *
-     * remain_count > 0
-     *
+     * 该 SQL 的核心条件是：remain_count > 0
      * 多个司机同时领取最后一张券时：
-     *
      * 司机 A 更新成功，返回 1；
      * 司机 B 更新失败，返回 0；
-     *
      * 这样不会发生库存扣成负数，也不会超发。
-     *
      * @param templateId 优惠券模板 ID
      * @param currentTime 当前时间
      * @return 1：扣减成功；0：库存不足、模板停用或不在领取时间内
