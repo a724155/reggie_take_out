@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.apache.commons.lang.StringUtils;
 
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -486,14 +487,208 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
     }
 
+    /**
+     * 支付渠道验签成功后，处理支付成功。
+     *
+     * 调用本方法前，调用方必须完成：
+     *
+     * 1. 支付渠道签名校验；
+     * 2. 商户号校验；
+     * 3. 支付单号校验；
+     * 4. 回调参数防篡改校验。
+     *
+     * 本方法只处理本地数据库状态。
+     *
+     * @param payOrderNo 商户支付单号
+     * @param channelTradeNo 第三方支付渠道流水号
+     * @param callbackPayAmount 第三方实际回调金额
+     * @param channelPaidTime 第三方支付成功时间
+     */
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void handlePaySuccess(String payOrderNo, String channelTradeNo, BigDecimal callbackPayAmount, LocalDateTime channelPaidTime) {
+
+        if (isBlank(payOrderNo)) {
+            throw new ColdChainBusinessException("商户支付单号不能为空");
+        }
+
+        if (isBlank(channelTradeNo)) {
+            throw new ColdChainBusinessException("支付渠道流水号不能为空");
+        }
+
+        if (Objects.isNull(callbackPayAmount) || callbackPayAmount.signum() < 0) {
+            throw new ColdChainBusinessException("支付回调金额非法");
+        }
+
+        if (channelPaidTime == null) {
+            throw new ColdChainBusinessException("支付渠道成功时间不能为空");
+        }
+
+        /**
+         * 锁定支付单行。解决支付回调和超时关闭任务并发问题。
+         * 同一时刻：回调线程要把支付单改为 PAID；超时任务要把支付单改为 CLOSED；
+         * 两者必须串行处理。
+         */
+        ColdChainPayOrderDO payOrderDO = coldChainPayOrderMapper.selectByPayOrderNoForUpdate(payOrderNo.trim());
+        if (payOrderDO == null) {
+            throw new ColdChainBusinessException("支付单不存在");
+        }
+
+        /**
+         * 支付渠道可能重复回调。
+         * 已支付支付单直接做幂等校验后返回，
+         * 不再重复核销优惠券、重复推进订单。
+         */
+        if (Objects.equals(payOrderDO.getPayStatus(), ColdChainPayStatusEnum.PAID.getCode())) {
+            validatePayAmount(payOrderDO, callbackPayAmount);
+            if (!isBlank(payOrderDO.getChannelTradeNo()) && !Objects.equals(payOrderDO.getChannelTradeNo(), channelTradeNo.trim())) {
+                throw new ColdChainBusinessException("支付渠道流水号与历史记录不一致");
+            }
+            return;
+        }
+
+        /*
+          已关闭支付单又收到成功回调，属于严重异常场景。
+          不能直接把 CLOSED 改回 PAID，需要进入支付对账、人工补偿或退款流程。
+         */
+        if (Objects.equals(payOrderDO.getPayStatus(), ColdChainPayStatusEnum.CLOSED.getCode())) {
+            throw new ColdChainBusinessException("支付单已关闭，需要进入支付对账流程");
+        }
+
+        if (!Objects.equals(payOrderDO.getPayStatus(), ColdChainPayStatusEnum.WAIT_PAY.getCode())) {
+            throw new ColdChainBusinessException("支付单状态异常");
+        }
+
+        validatePayAmount(payOrderDO, callbackPayAmount);
+
+        /**
+         * 回调到达时间晚，不等于司机支付晚。
+         * 所以这里比较的是：
+         * 支付渠道记录的实际支付成功时间
+         * 而不是 Controller 收到回调的当前时间。
+         */
+        if (payOrderDO.getExpireTime() == null || channelPaidTime.isAfter(payOrderDO.getExpireTime())) {
+            throw new ColdChainBusinessException("支付成功时间已超过支付单有效期，需要进入对账流程");
+        }
+        int paySuccessCount;
+        try {
+            paySuccessCount = coldChainPayOrderMapper.markPaySuccessIfWaiting(payOrderDO.getId(), channelTradeNo.trim(), channelPaidTime);
+        } catch (DuplicateKeyException exception) {
+
+            /**
+             * 常见于异常渠道流水重复。
+             * 例如同一 channelTradeNo 被试图写入两笔支付单。
+             * 数据库唯一索引 uk_channel_trade_no 会兜住。
+             */
+            throw new ColdChainBusinessException("支付渠道流水号冲突，需要进入支付对账流程");
+        }
+        if (paySuccessCount != 1) {
+            throw new ColdChainBusinessException("支付单状态更新失败");
+        }
+
+        /**
+         * 有优惠券时，支付成功必须核销券。
+         * 支付单 PAID、优惠券 USED、订单 DEPOSIT_PAID
+         * 三者必须是一个事务。
+         */
+        if (payOrderDO.getDriverCouponId() != null) {
+            int consumeCouponCount = coldChainDriverCouponMapper.consumeLockedCoupon(
+                            payOrderDO.getDriverCouponId(), payOrderDO.getDriverId(),
+                            payOrderDO.getOrderId(), channelPaidTime);
+
+            if (consumeCouponCount != 1) {
+
+                /**
+                 * 不能只打日志然后继续。
+                 * 否则可能出现：钱支付成功；订单已经成功；
+                 * 但优惠券还处于 LOCKED。这会造成账实不一致。
+                 * 抛异常后事务整体回滚，等支付渠道重试回调或人工补偿。
+                 */
+                throw new ColdChainBusinessException("优惠券核销失败，需要进入异常处理流程");
+            }
+        }
+
+        int orderUpdatedCount = coldChainOrderMapper.updateOrderStatus(
+                        payOrderDO.getOrderId(), payOrderDO.getDriverId(),
+                        ColdChainOrderStatusEnum.WAIT_DEPOSIT_PAY.getCode(), ColdChainOrderStatusEnum.DEPOSIT_PAID.getCode());
+
+        if (orderUpdatedCount != 1) {
+            throw new ColdChainBusinessException("订单状态更新失败，需要进入异常处理流程");
+        }
 
     }
 
+    /**
+     * 支付超时后关闭支付单并释放优惠券。
+     * 注意：
+     * 该方法不能由 XXL-JOB 一扫到超时单就直接调用。
+     * 正确流程是：
+     * 1. XXL-JOB 查询本地超时待支付单；
+     * 2. 调用支付渠道查询接口；
+     * 3. 渠道已支付，则调用 handlePaySuccess；
+     * 4. 渠道确认未支付，才调用当前方法；
+     *
+     * @param payOrderId 支付单 ID
+     */
     @Override
     public void closeExpiredPayOrderAfterChannelConfirmedUnpaid(Long payOrderId) {
+        if (payOrderId == null || payOrderId <= 0) {
+            return;
+        }
 
+        /**
+         * 锁支付单。防止支付回调与超时任务同时修改支付单状态。
+         */
+        ColdChainPayOrderDO payOrderDO = coldChainPayOrderMapper.selectByIdForUpdate(payOrderId);
+
+        if (payOrderDO == null) {
+            return;
+        }
+
+        if (!Objects.equals(payOrderDO.getPayStatus(), ColdChainPayStatusEnum.WAIT_PAY.getCode())) {
+            return;
+        }
+
+        LocalDateTime currentTime = LocalDateTime.now();
+
+        if (payOrderDO.getExpireTime() == null || payOrderDO.getExpireTime().isAfter(currentTime)) {
+            return;
+        }
+
+        int closePayOrderCount = coldChainPayOrderMapper.closePayOrderIfExpired(payOrderId, currentTime);
+
+        if (closePayOrderCount != 1) {
+            return;
+        }
+
+        /**
+         * 有优惠券时，支付单关闭后必须释放优惠券。
+         * LOCKED -> UNUSED
+         */
+        if (payOrderDO.getDriverCouponId() != null) {
+            int releaseCouponCount = coldChainDriverCouponMapper.releaseLockedCoupon(payOrderDO.getDriverCouponId(), payOrderDO.getDriverId(), payOrderDO.getOrderId());
+            if (releaseCouponCount != 1) {
+                throw new ColdChainBusinessException("支付超时释放优惠券失败，需要进入异常处理流程");
+            }
+        }
+
+        /**
+         * 支付单关闭后，订单进入支付超时状态。
+         * 后续你做锁货时，可以在这里继续：
+         * 释放货源锁；
+         * 恢复货源可见；
+         * 通知司机；
+         * 写操作日志；
+         * 发送 RocketMQ 消息。
+         */
+        int orderUpdatedCount = coldChainOrderMapper.updateOrderStatus(
+                        payOrderDO.getOrderId(), payOrderDO.getDriverId(),
+                        ColdChainOrderStatusEnum.WAIT_DEPOSIT_PAY.getCode(),
+                        ColdChainOrderStatusEnum.PAY_TIMEOUT.getCode());
+
+        if (orderUpdatedCount != 1) {
+            throw new ColdChainBusinessException("支付超时订单状态更新失败");
+        }
     }
 
     /**
@@ -575,35 +770,21 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
 
     /**
      * 校验支付渠道回调金额。
-     *
-     * BigDecimal 比较必须使用 compareTo。
-     *
-     * 不要使用 equals。
-     *
+     * BigDecimal 比较必须使用 compareTo。不要使用 equals。
      * 因为：
-     *
-     * new BigDecimal("8.0").equals(new BigDecimal("8.00"))
-     *
-     * 返回 false。
-     *
+     * new BigDecimal("8.0").equals(new BigDecimal("8.00"))返回 false。
      * 但 compareTo 返回 0，表示数值相等。
-     *
      * @param payOrderDO 本地支付单
      * @param callbackPayAmount 支付渠道回调金额
      */
-    private void validatePayAmount(
-            ColdChainPayOrderDO payOrderDO,
-            BigDecimal callbackPayAmount) {
+    private void validatePayAmount(ColdChainPayOrderDO payOrderDO, BigDecimal callbackPayAmount) {
 
         if (payOrderDO.getPayAmount() == null) {
             throw new ColdChainBusinessException("本地支付金额异常");
         }
 
-        if (payOrderDO.getPayAmount()
-                .compareTo(callbackPayAmount) != 0) {
-            throw new ColdChainBusinessException(
-                    "支付回调金额与本地支付金额不一致"
-            );
+        if (payOrderDO.getPayAmount().compareTo(callbackPayAmount) != 0) {
+            throw new ColdChainBusinessException("支付回调金额与本地支付金额不一致");
         }
     }
 
@@ -675,7 +856,8 @@ public class ColdChainPayOrderServiceImpl implements IColdChainPayOrderService {
      * @return true：为空白字符串
      */
     private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
+
+        return StringUtils.isBlank(value) || StringUtils.isBlank(value.trim());
     }
 
 

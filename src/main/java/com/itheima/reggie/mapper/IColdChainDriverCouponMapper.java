@@ -130,7 +130,7 @@ public interface IColdChainDriverCouponMapper {
      * 订单 A 锁住了优惠券；
      * 后来订单 B 误把这张券释放；
      * 最终导致一张券被多个订单使用。
-     *
+     * com.itheima.reggie.enums.ColdChainCouponStatusEnum
      * @param driverCouponId 司机优惠券 ID
      * @param driverId 当前司机 ID
      * @param orderId 当前订单 ID
