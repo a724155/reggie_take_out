@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.itheima.reggie.mapper.IColdChainPayOrderMapper">
+    <resultMap id="ColdChainPayOrderResultMap" type="com.itheima.reggie.entity.ColdChainPayOrderDO">
+        <id column="id" property="id"/>
+
+        <result column="pay_order_no" property="payOrderNo"/>
+        <result column="request_no" property="requestNo"/>
+        <result column="order_id" property="orderId"/>
+        <result column="driver_id" property="driverId"/>
+        <result column="original_amount" property="originalAmount"/>
+        <result column="driver_coupon_id" property="driverCouponId"/>
+        <result column="coupon_discount_amount" property="couponDiscountAmount"/>
+        <result column="pay_amount" property="payAmount"/>
+        <result column="pay_status" property="payStatus"/>
+        <result column="expire_time" property="expireTime"/>
+        <result column="channel_trade_no" property="channelTradeNo"/>
+        <result column="paid_time" property="paidTime"/>
+        <result column="closed_time" property="closedTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="BaseColumnList">
+        id,
+        pay_order_no,
+        request_no,
+        order_id,
+        driver_id,
+        original_amount,
+        driver_coupon_id,
+        coupon_discount_amount,
+        pay_amount,
+        pay_status,
+        expire_time,
+        channel_trade_no,
+        paid_time,
+        closed_time,
+        create_time,
+        update_time
+    </sql>
+
+    <!-- 根据前端幂等号查询支付单 -->
+    <select id="selectByRequestNo" resultMap="ColdChainPayOrderResultMap">
+        SELECT <include refid="BaseColumnList"/>
+        FROM cold_chain_pay_order
+        WHERE request_no = #{requestNo}
+        LIMIT 1
+    </select>
+
+    <!-- 根据订单 ID 查询支付单 -->
+    <select id="selectByOrderId" resultMap="ColdChainPayOrderResultMap">
+        SELECT
+        <include refid="BaseColumnList"/>
+        FROM cold_chain_pay_order
+        WHERE order_id = #{orderId}
+        LIMIT 1
+    </select>
+
+    <!-- 根据支付单主键查询并加锁 -->
+    <select id="selectByIdForUpdate" resultMap="ColdChainPayOrderResultMap">
+        SELECT <include refid="BaseColumnList"/>
+        FROM cold_chain_pay_order
+        WHERE id = #{payOrderId}
+        FOR UPDATE
+
+    </select>
+
+    <!--
+        支付渠道回调时，根据商户支付单号查询支付单并加锁。
+        正式项目中：
+        回调报文通常会传商户订单号 payOrderNo，
+        不会传你的数据库主键 id。
+    -->
+    <select id="selectByPayOrderNoForUpdate" resultMap="ColdChainPayOrderResultMap">
+        SELECT <include refid="BaseColumnList"/>
+        FROM cold_chain_pay_order
+        WHERE pay_order_no = #{payOrderNo}
+        FOR UPDATE
+    </select>
+
+    <!--
+        新增支付单。
+        useGeneratedKeys="true"：
+        新增成功后会回填 payOrderDO.id。
+    -->
+    <insert id="insertPayOrder" parameterType="com.itheima.reggie.entity.ColdChainPayOrderDO"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO cold_chain_pay_order (pay_order_no,
+                                          request_no,
+                                          order_id,
+                                          driver_id,
+                                          original_amount,
+                                          driver_coupon_id,
+                                          coupon_discount_amount,
+                                          pay_amount,
+                                          pay_status,
+                                          expire_time,
+                                          channel_trade_no,
+                                          paid_time,
+                                          closed_time)
+        VALUES (#{payOrderNo},
+                #{requestNo},
+                #{orderId},
+                #{driverId},
+                #{originalAmount},
+                #{driverCouponId},
+                #{couponDiscountAmount},
+                #{payAmount},
+                #{payStatus},
+                #{expireTime},
+                #{channelTradeNo},
+                #{paidTime},
+                #{closedTime})
+    </insert>
+
+    <!--
+        支付成功状态更新。
+        注意 pay_status = 10：
+        它是支付回调幂等的最终 SQL 保障。
+        即使第三方支付渠道重复回调十次，
+        只有第一次能够把 WAIT_PAY 改成 PAID。
+    -->
+    <update id="markPaySuccessIfWaiting">
+        UPDATE cold_chain_pay_order
+        SET pay_status = 20,
+            channel_trade_no = #{channelTradeNo},
+            paid_time = #{paidTime}
+        WHERE id = #{payOrderId}
+          AND pay_status = 10
+    </update>
+
+    <!--
+        关闭超时未支付支付单。
+        这里既校验：
+        pay_status = 10
+        又校验：
+        expire_time <= closedTime
+        防止未到期支付单被错误关闭。
+    -->
+    <update id="closePayOrderIfExpired">
+        UPDATE cold_chain_pay_order
+        SET pay_status = 30,
+            closed_time = #{closedTime}
+        WHERE id = #{payOrderId}
+          AND pay_status = 10
+          AND expire_time &lt;= #{closedTime}
+    </update>
+
+</mapper>
